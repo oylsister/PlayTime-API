@@ -33,6 +33,8 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative("PlayTime_GetClientLastLogin", Native_GetClientLastLogin);
 	CreateNative("PlayTime_GetClientTotalPlayTime", Native_GetClientTotalPlayTime);
 	CreateNative("PlayTime_GetClientTodayPlayTime", Native_GetClientTodayPlayTime);
+
+	return APLRes_Success;
 }
 
 public void OnClientConnected(int client)
