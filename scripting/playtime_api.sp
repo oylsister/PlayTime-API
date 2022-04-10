@@ -22,10 +22,7 @@ public void OnPluginStart()
 	// Connect To Database
 	Database.Connect(Database_Connect, "playtime");
 
-	// Query for creating table
-	char sQuery[255];
-	Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS playerplaytime (steamid VARCHAR(20) UNIQUE, last_connect INT(12), total_playtime INT(12), today_playtime INT(12));");
-	g_hDatabase.Query(SQLErrorCheckCallback, sQuery);
+	RegConsoleCmd("playtime", Command_PlayTime);
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -37,7 +34,60 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	return APLRes_Success;
 }
 
-public void OnClientConnected(int client)
+public Action Command_PlayTime(int client, int args)
+{
+	Menu menu = new Menu(PlayTimeMenu_Handler);
+	menu.SetTitle("Play Time Stats");
+
+	char thename[128];
+	Format(thename, sizeof(thename), "Name: %N", client);
+	menu.AddItem("name", thename);
+
+	char lasttime[64];
+	char lastlogin[128];
+	FormatTime(lasttime, sizeof(lasttime), "%D %R", iLastLogin[client]);
+	Format(lastlogin, sizeof(lastlogin), "Last Login: %s", lasttime);
+
+	char todaylogin[128];
+	char todaytime[64];
+	GetTimeFromStamp(todaytime, sizeof(todaytime), iTodayPlayTime[client]);
+	Format(todaylogin, sizeof(todaylogin), "Today Play Time: %s", todaytime);
+
+	char totalplay[128];
+	char totaltime[64];
+	GetTimeFromStamp(totaltime, sizeof(totaltime), iTotalPlayTime[client]);
+	Format(totalplay, sizeof(totalplay), "Total Play Time: %s", totaltime);
+
+	menu.AddItem("lastlogin", lastlogin);
+	menu.AddItem("todaylogin", todaylogin);
+	menu.AddItem("totalplay", totalplay);
+
+	menu.ExitButton = true;
+	menu.Display(client, MENU_TIME_FOREVER);
+	return Plugin_Handled;
+}
+
+public int PlayTimeMenu_Handler(Menu menu, MenuAction action, int param1, int param2)
+{
+	switch(action)
+	{
+		case MenuAction_DrawItem:
+		{
+			for(int i = 0; i < 3; i++)
+			{
+				if(i == param2)
+					return ITEMDRAW_RAWLINE;
+			}
+		}
+		case MenuAction_End:
+		{
+			delete menu;
+		}
+	}
+	return 0;
+}
+
+public void OnClientAuthorized(int client)
 {
 	char sQuery[256];
 
@@ -112,7 +162,13 @@ public void Database_Connect(Database db, const char[] error, any data)
 		LogError("Database_Connect returned invalid Database Handle");
 		return;
 	}
+
 	g_hDatabase = db;
+
+	// Query for creating table
+	char sQuery[255];
+	Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS playerplaytime (steamid VARCHAR(64) UNIQUE, last_connect INT(12), total_playtime INT(12), today_playtime INT(12));");
+	g_hDatabase.Query(SQLErrorCheckCallback, sQuery);
 }
 
 public void SQLErrorCheckCallback(Database db, DBResultSet results, const char[] error, any client)
@@ -145,6 +201,14 @@ public void SQLGetClientData(Database db, DBResultSet results, const char[] erro
 		iLastLogin[client] = GetTime();
 		iTotalPlayTime[client] = 0;
 		iTodayPlayTime[client] = 0;
+
+		char steamid[128];
+		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+
+		char sQuery[255];
+		Format(sQuery, sizeof(sQuery), "INSERT INTO playerplaytime (steamid, last_connect, total_playtime, today_playtime) VALUES ('%s', %d, %d, %d);", steamid, iLastLogin[client], iTotalPlayTime[client], iTodayPlayTime[client]);
+		g_hDatabase.Query(SQLErrorCheckCallback, sQuery);
+
 		return;
 	}
 
@@ -192,4 +256,36 @@ stock int TodayPlayerPlayTime(int client)
 		return -1;
 
 	return iTodayPlayTime[client];
+}
+
+stock void GetTimeFromStamp(char[] buffer, int maxlength, int timestamp)
+{
+	if (timestamp > 86400)
+	{
+		int days = timestamp / 86400 % 365;
+		int hours = (timestamp / 3600) % 24;
+		if (hours > 0)
+		{
+			FormatEx(buffer, maxlength, "%d Days %d Hours", days, hours);
+		}
+		else
+		{
+			FormatEx(buffer, maxlength, "%d Days", days);
+		}
+		return;
+	}
+	else
+	{
+		int Hours = (timestamp / 3600);
+		int Mins = (timestamp / 60) % 60;
+
+		if (Hours > 0)
+		{
+			FormatEx(buffer, maxlength, "%02d Hours %02d Minutes", Hours, Mins);
+		}
+		else
+		{
+			FormatEx(buffer, maxlength, "%02d Minutes", Mins);
+		}
+	}
 }
